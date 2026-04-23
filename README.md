@@ -28,8 +28,8 @@ Dự án được áp dụng mô hình thiết kế hướng đối tượng (OO
 `segmentation.py` - Khởi tạo và chạy nội suy mạng U-Net. Cung cấp Tensor thô chứa Mask của đường/xe/trời/người.
 `depth.py` - Tích hợp MiDaS, tạo Depth Map và cung cấp hàm toán học ước lượng khoảng cách tương đối.
 `performance.py` - Theo dõi và đo lường FPS, tối ưu hóa tài nguyên tính toán (Inference time).
-`tv4_core_logic.py` - Xử lý Upscale, tìm viền (Contours) đối tượng, Mapping ma trận và quyết định trạng thái (SAFE/DANGER).
-`tv5_ui_ux.py` - Vẽ Bounding Box, tô màu Segmentation, render Dashboard và kích hoạt luồng Âm thanh cảnh báo (pyttsx3).
+`core_logic.py` - Xử lý Upscale, tìm viền (Contours) đối tượng, Mapping ma trận và quyết định trạng thái (SAFE/DANGER).
+`ui_ux.py` - Vẽ Bounding Box, tô màu Segmentation, render Dashboard và kích hoạt luồng Âm thanh cảnh báo (pyttsx3).
 `main.py` - khởi tạo luồng đọc Video, gọi các module theo đúng Workflow và xuất file kết quả.
 
 *(Ngoài ra repo còn đính kèm file `unet_road_car_sky(class4).pth và unet_road_car_sky(class4).pth` là các file model đã được huấn luyện (trained model)).*
