@@ -16,3 +16,6 @@ scikit-learn==1.4.2
 einops==0.8.0
 imageio==2.34.1
 psutil==5.9.8
+transformers>=4.48.0
+safetensors>=0.4.0
+huggingface-hub>=0.27.0
