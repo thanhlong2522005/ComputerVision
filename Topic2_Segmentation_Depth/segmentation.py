@@ -1,24 +1,14 @@
-import torch
 import cv2
-import segmentation_models_pytorch as smp
+from ultralytics import YOLO
 
 class SegmentationModule:
-    def __init__(self, model_path, device):
+    def __init__(self, model_path="yolov8n-seg.pt", device="cpu"):
         self.device = device
-        print("Đang tải mô hình U-Net...")
-        # Cấu hình kiến trúc U-Net
-        self.model = smp.Unet(encoder_name="resnet34", encoder_weights=None, in_channels=3, classes=6)
-        self.model.load_state_dict(torch.load(model_path, map_location=device))
-        self.model.to(device)
-        self.model.eval()
+        print("Đang tải YOLOv8n-seg (Ép xung tốc độ cao)...")
+        self.model = YOLO(model_path)
+        self.vehicle_classes = [2, 3, 5, 7]
 
     def predict(self, img_rgb):
-        # Tiền xử lý riêng cho U-Net (Resize 512x512)
-        img_resized = cv2.resize(img_rgb, (512, 512))
-        input_tensor = torch.tensor(img_resized / 255.0, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0).to(self.device)
-        
-        # Suy luận (Inference)
-        with torch.no_grad():
-            output = self.model(input_tensor)
-            
-        return output
+        # TỐI ƯU 4: Ép tham số imgsz=320 để AI chạy cực nhanh trên CPU
+        results = self.model(img_rgb, classes=self.vehicle_classes, verbose=False, device=self.device, imgsz=320)
+        return results[0]
