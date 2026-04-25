@@ -1,41 +1,43 @@
 import cv2
 import numpy as np
 import torch
-from depth import DepthModule # Gọi hàm tính khoảng cách của TV2
+from depth import DepthModule 
 
 class CoreLogicAnalyzer:
     def __init__(self, danger_threshold=5.0):
-        self.danger_threshold = danger_threshold # Ngưỡng nguy hiểm (dưới 5m)
+        self.danger_threshold = danger_threshold 
 
-    def analyze_scene(self, unet_tensor, midas_tensor, target_shape):
+    def analyze_scene(self, yolo_result, midas_tensor, target_shape):
         h, w = target_shape
 
-        # 1. POST-PROCESSING: Upscale về kích thước gốc của Video
-        seg_mask = torch.nn.functional.interpolate(unet_tensor, size=(h, w), mode="bilinear", align_corners=False)
-        seg_mask = torch.argmax(seg_mask, dim=1).squeeze().cpu().numpy()
-
-        depth_map = torch.nn.functional.interpolate(midas_tensor.unsqueeze(1), size=(h, w), mode="bicubic", align_corners=False).squeeze().cpu().numpy()
-
-        # 2. OBJECT EXTRACTION: Trích xuất mảng chứa xe (Class 2)
-        car_mask = (seg_mask == 2).astype(np.uint8)
-        contours, _ = cv2.findContours(car_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # TỐI ƯU 2: Đổi "bicubic" thành "bilinear" (tốn ít tính toán CPU hơn)
+        depth_map = torch.nn.functional.interpolate(
+            midas_tensor.unsqueeze(1), size=(h, w), mode="bilinear", align_corners=False
+        ).squeeze().cpu().numpy()
 
         detected_cars = []
-        for cnt in contours:
-            if cv2.contourArea(cnt) > 800: # Lọc nhiễu
-                x, y, bw, bh = cv2.boundingRect(cnt)
+        
+        if yolo_result.masks is not None and yolo_result.boxes is not None:
+            masks = yolo_result.masks.data.cpu().numpy() 
+            boxes = yolo_result.boxes.xyxy.cpu().numpy() 
+            
+            for i in range(len(masks)):
+                x1, y1, x2, y2 = map(int, boxes[i])
+                bw, bh = x2 - x1, y2 - y1
                 
-                # Trích riêng từng chiếc xe để đo Depth
-                single_car_mask = np.zeros_like(car_mask)
-                cv2.drawContours(single_car_mask, [cnt], -1, 1, thickness=cv2.FILLED)
-                
-                # Tính độ sâu trung bình và gọi hàm TV2 để quy đổi ra mét
-                mean_depth = np.mean(depth_map[single_car_mask == 1])
-                distance = DepthModule.estimate_distance(mean_depth)
-                
-                detected_cars.append({'bbox': (x, y, bw, bh), 'distance': distance})
+                # Diện tích ở ảnh 640px nhỏ hơn, nên hạ bộ lọc nhiễu xuống 400
+                if bw * bh > 400: 
+                    mask = cv2.resize(masks[i], (w, h), interpolation=cv2.INTER_NEAREST)
+                    
+                    mean_depth = np.mean(depth_map[mask == 1])
+                    distance = DepthModule.estimate_distance(mean_depth)
+                    
+                    detected_cars.append({
+                        'bbox': (x1, y1, bw, bh),
+                        'distance': distance,
+                        'mask': mask 
+                    })
 
-        # 3. DECISION MAKING: Quyết định có nguy hiểm không
         danger_flag = False
         min_distance = 999.0
         if detected_cars:
@@ -43,5 +45,4 @@ class CoreLogicAnalyzer:
             if min_distance < self.danger_threshold:
                 danger_flag = True
 
-        # Trả về gói dữ liệu đã xử lý cho TV5 vẽ
-        return seg_mask, detected_cars, danger_flag, min_distance
+        return None, detected_cars, danger_flag, min_distance
