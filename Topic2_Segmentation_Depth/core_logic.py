@@ -25,18 +25,43 @@ class CoreLogicAnalyzer:
                 x1, y1, x2, y2 = map(int, boxes[i])
                 bw, bh = x2 - x1, y2 - y1
                 
-                # Diện tích ở ảnh 640px nhỏ hơn, nên hạ bộ lọc nhiễu xuống 400
-                if bw * bh > 400: 
-                    mask = cv2.resize(masks[i], (w, h), interpolation=cv2.INTER_NEAREST)
-                    
+                if bw * bh <= 150: 
+                    continue
+
+                if y2 > h * 0.95 and bw > w * 0.6:
+                    continue
+
+                center_x = x1 + (bw / 2)
+                
+                is_on_the_edge = (center_x < w * 0.20 or center_x > w * 0.80)
+                
+                if is_on_the_edge:
+                    if bw * bh < 4000:
+                        continue
+
+                mask = cv2.resize(masks[i], (w, h), interpolation=cv2.INTER_NEAREST)
+                
+                mask = cv2.resize(masks[i], (w, h), interpolation=cv2.INTER_NEAREST)
+                
+                y_bottom_start = int(y1 + bh * 0.8)
+                
+                bottom_mask = mask.copy()
+                bottom_mask[:y_bottom_start, :] = 0 
+                
+                valid_depths = depth_map[bottom_mask == 1]
+                if len(valid_depths) > 0:
+                    mean_depth = np.mean(valid_depths)
+                else:
                     mean_depth = np.mean(depth_map[mask == 1])
-                    distance = DepthModule.estimate_distance(mean_depth)
-                    
-                    detected_cars.append({
-                        'bbox': (x1, y1, bw, bh),
-                        'distance': distance,
-                        'mask': mask 
-                    })
+                
+                distance = DepthModule.estimate_distance(mean_depth)
+                # -----------------------------------------------------
+                
+                detected_cars.append({
+                    'bbox': (x1, y1, bw, bh),
+                    'distance': distance,
+                    'mask': mask 
+                })
 
         danger_flag = False
         min_distance = 999.0
