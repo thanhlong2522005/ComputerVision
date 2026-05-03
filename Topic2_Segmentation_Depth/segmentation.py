@@ -10,5 +10,9 @@ class SegmentationModule:
 
     def predict(self, img_rgb):
         # TỐI ƯU 4: Ép tham số imgsz=320 để AI chạy cực nhanh trên CPU
-        results = self.model(img_rgb, classes=self.vehicle_classes, verbose=False, device=self.device, imgsz=320)
+        results = self.model(img_rgb, 
+                            classes=self.vehicle_classes,
+                            verbose=False,
+                            device=self.device,
+                            imgsz=320)
         return results[0]

@@ -20,8 +20,6 @@ class DepthModule:
         midas_dist = 2000 / (depth_value + 1e-6)
         
         # 2. Khoảng cách Vật lý (Thuật toán Pinhole Camera Model)
-        # Giả định xe ô tô cao trung bình 1.5m, tiêu cự camera (focal length) ~ 700
-        # Xe trên màn hình (bbox_height) càng to thì khoảng cách càng nhỏ
         physics_dist = (1.5 * 700) / (bbox_height + 1e-6)
         
         # Lấy trung bình cộng (Lai ghép) để bù trừ sai số cho nhau

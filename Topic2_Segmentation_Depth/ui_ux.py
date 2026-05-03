@@ -8,7 +8,7 @@ class UIAndVoiceManager:
     def __init__(self):
         print("Khởi tạo hệ thống Âm thanh & UI...")
         self.last_alert_time = 0
-        self.cooldown = 1.0
+        self.cooldown = 0.5
 
     def trigger_warning_sound(self):
         current_time = time.time()
@@ -19,14 +19,13 @@ class UIAndVoiceManager:
                 except: pass
             threading.Thread(target=beep_task, daemon=True).start()
 
-    def render_ui(self, frame, seg_mask, cars, danger_flag, min_dist, fps):
+    def render_ui(self, frame, seg_mask, cars, danger_flag, min_dist, fps, is_closing):
         display = frame.copy()
         h, w = display.shape[:2]
         
         # Vẽ 2 vạch giả lập "Làn đường của mình" (ROI Corridor)
-        # Giúp thầy cô thấy rõ thuật toán lọc của nhóm xịn cỡ nào
-        cv2.line(display, (int(w*0.3), h), (int(w*0.45), int(h*0.6)), (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.line(display, (int(w*0.7), h), (int(w*0.55), int(h*0.6)), (255, 255, 255), 2, cv2.LINE_AA)
+        # cv2.line(display, (int(w*0.3), h), (int(w*0.45), int(h*0.6)), (255, 255, 255), 2, cv2.LINE_AA)
+        # cv2.line(display, (int(w*0.7), h), (int(w*0.55), int(h*0.6)), (255, 255, 255), 2, cv2.LINE_AA)
 
         overlay = display.copy()
 
@@ -50,7 +49,7 @@ class UIAndVoiceManager:
         status_color = (0, 255, 0)
         status_text = "SAFE"
 
-        if danger_flag:
+        if danger_flag and is_closing:
             status_color = (0, 0, 255)
             status_text = "DANGER! BRAKE!"
             cv2.rectangle(display, (0, 0), (w, h), (0, 0, 255), 10)
@@ -58,6 +57,9 @@ class UIAndVoiceManager:
         elif min_dist < 15.0 and min_dist != 999.0:
             status_color = (0, 165, 255)
             status_text = "WARNING"
+        elif min_dist < 6.0 and not is_closing:
+            status_color = (255, 255, 0)
+            status_text = "STOPPED (SAFE)"
 
         cv2.rectangle(display, (10, 10), (320, 100), (0, 0, 0), -1)
         cv2.putText(display, f"FPS: {fps:.1f}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
