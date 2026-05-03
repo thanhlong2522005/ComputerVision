@@ -9,12 +9,12 @@ from ui_ux import UIAndVoiceManager
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Bắt đầu chạy LIVE REAL-TIME (Tối ưu hóa CPU) trên: {device}")
+    print(f"Bắt đầu chạy (Tối ưu hóa CPU) trên: {device}")
 
     seg_module = SegmentationModule(model_path="yolov8n-seg.pt", device=device)
     depth_module = DepthModule(device)
     perf_tracker = PerformanceTracker()
-    logic_analyzer = CoreLogicAnalyzer(danger_threshold=5.0)
+    logic_analyzer = CoreLogicAnalyzer(danger_threshold=7.0)
     ui_manager = UIAndVoiceManager()
 
     video_input = "test_video.mp4" 
@@ -31,13 +31,14 @@ def main():
 
     print("Hệ thống sẵn sàng! Đang mở cửa sổ Video...")
 
-    FRAME_SKIP = 3  # Chỉ chạy AI mỗi 3 frame (Tăng số này lên FPS càng cao)
+    FRAME_SKIP = 3  # Chỉ chạy AI mỗi 3 frame
     frame_counter = 0
     
     # Biến lưu trữ (Cache) kết quả của Frame trước đó
     cached_cars = []
     cached_danger = False
     cached_min_dist = 999.0
+    cached_closing = False
 
     while True:
         ret, frame = cap.read()
@@ -52,15 +53,16 @@ def main():
             yolo_result = seg_module.predict(img_rgb)
             midas_tensor = depth_module.predict(img_rgb)
 
-            _, cached_cars, cached_danger, cached_min_dist = logic_analyzer.analyze_scene(
+            _, cached_cars, cached_danger, cached_min_dist, cached_closing = logic_analyzer.analyze_scene(
                 yolo_result, midas_tensor, (target_h, target_w)
             )
 
+
         # Lấy Cache vẽ ra UI liên tục ở mọi Frame -> FPS rất cao
         current_fps = perf_tracker.update()
-        final_frame = ui_manager.render_ui(frame, None, cached_cars, cached_danger, cached_min_dist, current_fps)
+        final_frame = ui_manager.render_ui(frame, None, cached_cars, cached_danger, cached_min_dist, current_fps,cached_closing)
 
-        cv2.imshow("He thong ADAS (CPU Optimized)", final_frame)
+        cv2.imshow("He thong ADAS(CPU)", final_frame)
         
         # Tăng bộ đếm
         frame_counter += 1

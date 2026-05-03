@@ -4,19 +4,25 @@ import torch
 from depth import DepthModule 
 
 class CoreLogicAnalyzer:
-    def __init__(self, danger_threshold=5.0):
+    def __init__(self, danger_threshold=7.0):
         self.danger_threshold = danger_threshold 
-        # Biến nhớ để làm mượt số liệu (Chống nhảy loạn xạ)
+        
+        # Làm mượt khoảng cách
         self.smoothed_min_dist = None 
+        
+        # NEW: lưu khoảng cách frame trước
+        self.prev_min_dist = None
 
     def analyze_scene(self, yolo_result, midas_tensor, target_shape):
         h, w = target_shape
 
         depth_map = torch.nn.functional.interpolate(
-            midas_tensor.unsqueeze(1), size=(h, w), mode="bilinear", align_corners=False
+            midas_tensor.unsqueeze(1),
+            size=(h, w),
+            mode="bilinear",
+            align_corners=False
         ).squeeze().cpu().numpy()
 
-        # Làn đường an toàn (ROI 30% - 70%)
         safe_zone_left = w * 0.3
         safe_zone_right = w * 0.7
 
@@ -32,18 +38,15 @@ class CoreLogicAnalyzer:
                 x1, y1, x2, y2 = map(int, boxes[i])
                 bw, bh = x2 - x1, y2 - y1
                 
-                # 1. Bỏ qua các đốm nhiễu quá nhỏ
-                if bw * bh <= 400: 
+                if bw * bh <= 400:
                     continue
 
-                # 2. Bỏ qua mui xe của chính mình (Ego-vehicle hood)
                 if y2 > h * 0.95 and bw > w * 0.6:
                     continue
 
-                # 3. Lấy Depth ở phần gầm xe (Chính xác hơn nóc xe)
                 mask = cv2.resize(masks[i], (w, h), interpolation=cv2.INTER_NEAREST)
                 
-                y_bottom_start = int(y1 + bh * 0.8) # Lấy 20% dưới cùng
+                y_bottom_start = int(y1 + bh * 0.8)
                 bottom_mask = mask.copy()
                 bottom_mask[:y_bottom_start, :] = 0 
                 
@@ -53,10 +56,8 @@ class CoreLogicAnalyzer:
                 else:
                     mean_depth = np.mean(depth_map[mask == 1])
                 
-                # 4. Truyền thêm chiều cao xe (bh) vào hàm để tính toán Vật lý Pinhole
                 distance = DepthModule.estimate_distance(mean_depth, bh)
                 
-                # 5. Phân loại xe cản đường (ROI)
                 center_x = x1 + (bw / 2)
                 is_in_path = safe_zone_left < center_x < safe_zone_right
                 
@@ -67,21 +68,34 @@ class CoreLogicAnalyzer:
                     'is_in_path': is_in_path 
                 })
 
-                # Chỉ xét khoảng cách cảnh báo nếu xe đang ngáng đường
                 if is_in_path and distance < raw_min_distance:
                     raw_min_distance = distance
 
-        # 6. THUẬT TOÁN EMA (LÀM MƯỢT SỐ NHẢY)
+        # ===== EMA =====
         if raw_min_distance != 999.0:
-            if self.smoothed_min_dist is None or self.smoothed_min_dist == 999.0:
+            if self.smoothed_min_dist is None:
                 self.smoothed_min_dist = raw_min_distance
             else:
-                self.smoothed_min_dist = (0.3 * raw_min_distance) + (0.7 * self.smoothed_min_dist)
+                self.smoothed_min_dist = (
+                    0.3 * raw_min_distance + 0.7 * self.smoothed_min_dist
+                )
         else:
             self.smoothed_min_dist = 999.0
 
-        # Kích hoạt báo động dựa trên con số đã được làm mượt
-        if self.smoothed_min_dist < self.danger_threshold:
+        # phát hiện đang tiến lại gần
+        is_closing = False
+        if self.prev_min_dist is not None and self.smoothed_min_dist != 999.0:
+            delta = self.prev_min_dist - self.smoothed_min_dist
+            
+            # Nếu khoảng cách giảm đủ lớn → đang tiến lại
+            if delta > 0.1:
+                is_closing = True
+
+        # cập nhật cho frame sau
+        self.prev_min_dist = self.smoothed_min_dist
+
+        # CHỈ cảnh báo khi: gần + đang tiến lại
+        if self.smoothed_min_dist < self.danger_threshold and is_closing:
             danger_flag = True
 
-        return None, detected_cars, danger_flag, self.smoothed_min_dist
+        return None, detected_cars, danger_flag, self.smoothed_min_dist, is_closing
